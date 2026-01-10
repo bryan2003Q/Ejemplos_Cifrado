@@ -1,64 +1,39 @@
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
+import os
+from cryptography.hazmat.primitives.serialization import load_pem_public_key
+from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
 from cryptography.fernet import Fernet
 
-# ---------- SERVIDOR ----------
+# Cargar clave pública
+with open("clave_publica.pem", "rb") as f:
+    clave_publica = load_pem_public_key(f.read())
 
-class ServidorSeguro:
-    def __init__(self):
-        self.clave_privada = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=2048
-        )
-        self.clave_publica = self.clave_privada.public_key()
+# Generar clave AES
+clave_aes = Fernet.generate_key()
+fernet = Fernet(clave_aes)
 
-    def descifrar_clave_sesion(self, clave_cifrada):
-        return self.clave_privada.decrypt(
-            clave_cifrada,
-            padding.OAEP(
-                mgf=padding.MGF1(hashes.SHA256()),
-                algorithm=hashes.SHA256(),
-                label=None
-            )
-        )
+archivo = input("Archivo académico a cifrar: ")
 
-# ---------- CLIENTE ----------
+with open(archivo, "rb") as f:
+    datos = f.read()
 
-class ClienteSeguro:
-    def __init__(self, clave_publica_servidor):
-        self.clave_sesion = Fernet.generate_key()
-        self.cipher = Fernet(self.clave_sesion)
-        self.clave_publica_servidor = clave_publica_servidor
+# Cifrar archivo con AES
+archivo_cifrado = fernet.encrypt(datos)
 
-    def cifrar_clave_sesion(self):
-        return self.clave_publica_servidor.encrypt(
-            self.clave_sesion,
-            padding.OAEP(
-                mgf=padding.MGF1(hashes.SHA256()),
-                algorithm=hashes.SHA256(),
-                label=None
-            )
-        )
+# Cifrar clave AES con RSA
+clave_aes_cifrada = clave_publica.encrypt(
+    clave_aes,
+    padding.OAEP(
+        mgf=padding.MGF1(algorithm=hashes.SHA256()),
+        algorithm=hashes.SHA256(),
+        label=None
+    )
+)
 
-    def cifrar_mensaje(self, mensaje):
-        return self.cipher.encrypt(mensaje.encode())
+# Guardar paquete híbrido
+with open(archivo + ".secure", "wb") as f:
+    f.write(len(clave_aes_cifrada).to_bytes(4, "big"))
+    f.write(clave_aes_cifrada)
+    f.write(archivo_cifrado)
 
-# ---------- SIMULACIÓN ----------
-
-servidor = ServidorSeguro()
-cliente = ClienteSeguro(servidor.clave_publica)
-
-# Cliente envía clave de sesión cifrada
-clave_sesion_cifrada = cliente.cifrar_clave_sesion()
-
-# Servidor recupera clave de sesión
-clave_sesion = servidor.descifrar_clave_sesion(clave_sesion_cifrada)
-
-# Comunicación segura
-cipher_servidor = Fernet(clave_sesion)
-
-mensaje_cifrado = cliente.cifrar_mensaje("Transferencia bancaria: $5000")
-mensaje_descifrado = cipher_servidor.decrypt(mensaje_cifrado)
-
-print("Mensaje cifrado:", mensaje_cifrado)
-print("Mensaje descifrado:", mensaje_descifrado.decode())
+print("[OK] Archivo cifrado con sistema híbrido")
