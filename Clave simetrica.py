@@ -1,9 +1,11 @@
+import tkinter as tk
+from tkinter import filedialog, messagebox
 import os, base64
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
 from cryptography.fernet import Fernet
 
-# ================== SEGURIDAD ==================
+# --------- CRIPTO ---------
 
 def generar_clave(password, salt):
     kdf = PBKDF2HMAC(
@@ -14,57 +16,63 @@ def generar_clave(password, salt):
     )
     return base64.urlsafe_b64encode(kdf.derive(password.encode()))
 
-# ================== CIFRADO ==================
-
 def cifrar_archivo(ruta, password):
     salt = os.urandom(16)
     clave = generar_clave(password, salt)
-    fernet = Fernet(clave)
+    f = Fernet(clave)
 
-    with open(ruta, "rb") as f:
-        datos = f.read()
+    with open(ruta, "rb") as file:
+        datos = file.read()
 
-    datos_cifrados = fernet.encrypt(datos)
-
-    with open(ruta + ".enc", "wb") as f:
-        f.write(salt + datos_cifrados)
-
-    print(f"[OK] Archivo cifrado: {ruta}.enc")
-
-# ================== DESCIFRADO ==================
+    with open(ruta + ".enc", "wb") as file:
+        file.write(salt + f.encrypt(datos))
 
 def descifrar_archivo(ruta, password):
-    with open(ruta, "rb") as f:
-        contenido = f.read()
+    with open(ruta, "rb") as file:
+        contenido = file.read()
 
     salt = contenido[:16]
-    datos_cifrados = contenido[16:]
-
+    datos = contenido[16:]
     clave = generar_clave(password, salt)
-    fernet = Fernet(clave)
+    f = Fernet(clave)
 
-    datos = fernet.decrypt(datos_cifrados)
+    with open(ruta.replace(".enc", ""), "wb") as file:
+        file.write(f.decrypt(datos))
 
-    archivo_original = ruta.replace(".enc", "")
-    with open(archivo_original, "wb") as f:
-        f.write(datos)
+# --------- GUI ---------
 
-    print(f"[OK] Archivo descifrado: {archivo_original}")
+def seleccionar_archivo():
+    ruta.set(filedialog.askopenfilename())
 
-# ================== USO ==================
+def cifrar():
+    if not ruta.get() or not password.get():
+        messagebox.showerror("Error", "Completa todos los campos")
+        return
+    cifrar_archivo(ruta.get(), password.get())
+    messagebox.showinfo("Éxito", "Archivo cifrado correctamente")
 
-if __name__ == "__main__":
-    password = input("Introduce tu contraseña: ")
+def descifrar():
+    if not ruta.get() or not password.get():
+        messagebox.showerror("Error", "Completa todos los campos")
+        return
+    descifrar_archivo(ruta.get(), password.get())
+    messagebox.showinfo("Éxito", "Archivo descifrado correctamente")
 
-    print("1. Cifrar archivo")
-    print("2. Descifrar archivo")
-    opcion = input("Elige opción: ")
+app = tk.Tk()
+app.title("Seguridad Académica - Cifrado Simétrico")
+app.geometry("420x230")
 
-    ruta = input("Ruta del archivo: ")
+ruta = tk.StringVar()
+password = tk.StringVar()
 
-    if opcion == "1":
-        cifrar_archivo(ruta, password)
-    elif opcion == "2":
-        descifrar_archivo(ruta, password)
-    else:
-        print("Opción inválida")
+tk.Label(app, text="Archivo académico:").pack(pady=5)
+tk.Entry(app, textvariable=ruta, width=45).pack()
+tk.Button(app, text="Seleccionar archivo", command=seleccionar_archivo).pack(pady=5)
+
+tk.Label(app, text="Contraseña:").pack()
+tk.Entry(app, textvariable=password, show="*").pack(pady=5)
+
+tk.Button(app, text="CIFRAR", command=cifrar, width=20).pack(pady=5)
+tk.Button(app, text="DESCIFRAR", command=descifrar, width=20).pack()
+
+app.mainloop()
